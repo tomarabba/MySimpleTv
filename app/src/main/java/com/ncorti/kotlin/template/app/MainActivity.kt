@@ -8,15 +8,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.sun.net.httpserver.HttpServer
-import java.net.InetSocketAddress
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.ServerSocket
 import java.net.URLDecoder
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
-    private var server: HttpServer? = null
+    private var isServerRunning = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,25 +34,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startLocalServer() {
-        server = HttpServer.create(InetSocketAddress(8080), 0).apply {
-            createContext("/play") { exchange ->
-                val query = exchange.requestURI.query ?: ""
-                val streamUrl = query.substringAfter("url=").let { 
-                    URLDecoder.decode(it, "UTF-8") 
+        thread {
+            try {
+                // Using raw Android ServerSocket instead of desktop HttpServer
+                val serverSocket = ServerSocket(8080)
+                while (isServerRunning) {
+                    val client = serverSocket.accept()
+                    val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                    val requestLine = reader.readLine()
+                    
+                    if (requestLine != null && requestLine.startsWith("GET")) {
+                        val path = requestLine.split(" ")[1]
+                        
+                        if (path.startsWith("/play?url=")) {
+                            val encodedUrl = path.substringAfter("url=")
+                            val streamUrl = URLDecoder.decode(encodedUrl, "UTF-8")
+                            runOnUiThread { playStream(streamUrl) }
+                        } else if (path.startsWith("/home")) {
+                            runOnUiThread { goToTvHome() }
+                        }
+                        
+                        // Send HTTP success response
+                        val response = "HTTP/1.1 200 OK\r\n\r\nOK\n"
+                        client.getOutputStream().write(response.toByteArray())
+                    }
+                    client.close()
                 }
-                runOnUiThread { playStream(streamUrl) }
-                val response = "OK"
-                exchange.sendResponseHeaders(200, response.length.toLong())
-                exchange.responseBody.use { it.write(response.toByteArray()) }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-
-            createContext("/home") { exchange ->
-                runOnUiThread { goToTvHome() }
-                val response = "GOING_HOME"
-                exchange.sendResponseHeaders(200, response.length.toLong())
-                exchange.responseBody.use { it.write(response.toByteArray()) }
-            }
-            start()
         }
     }
 
@@ -72,7 +84,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        server?.stop(0)
+        isServerRunning = false
         player.release()
     }
 }
