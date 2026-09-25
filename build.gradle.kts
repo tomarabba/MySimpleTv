@@ -28,7 +28,9 @@ subprojects {
         config.from(rootProject.files("config/detekt/detekt.yml"))
     }
 
-    dependencies {
+    dependencies {implementation("androidx.media3:media3-exoplayer:1.3.1")
+implementation("androidx.media3:media3-ui:1.3.1")
+implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
         detektPlugins(detektFormatting)
     }
 }
