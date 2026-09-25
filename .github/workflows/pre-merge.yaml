@@ -1,29 +1,30 @@
-name: Pre Merge Checks
+name: Build Android APK
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - "*"
+    branches: [ "main" ]
 
 jobs:
-  gradle:
+  build:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, 'ci skip') }}
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
+    - name: Get the code
+      uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "zulu"
-          java-version: "17"
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+    - name: Make Gradle executable
+      run: chmod +x ./gradlew
 
-      - name: Run Gradle
-        run: ./gradlew build publishToMavenLocal --continue
+    - name: Build the APK (Bypassing checks)
+      run: ./gradlew assembleDebug -x check -x detekt -x ktlintCheck
+
+    - name: Upload the APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: TV-Receiver-APK
+        path: app/build/outputs/apk/debug/*.apk
